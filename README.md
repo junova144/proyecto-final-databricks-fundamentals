@@ -2,6 +2,16 @@
 
 Pipeline de arquitectura medallón (Bronze → Silver → Gold) en Databricks con Unity Catalog, sobre el dataset público **Olist Brazilian E-Commerce** (Kaggle `olistbr/brazilian-ecommerce`).
 
+## Caso de negocio
+
+**Carrito Verde** (empresa ficticia) es un marketplace brasileño que conecta pequeños vendedores con compradores de los 27 estados del país. Creció con fuerza durante 2017, pero en 2018 las ventas se estancaron y aumentaron las reseñas negativas. La empresa no tiene una fuente de datos confiable: la información de pedidos, pagos, entregas y reseñas está en archivos separados, sin limpieza ni documentación.
+
+**Objetivos**
+1. Construir una plataforma de datos confiable, trazable y documentada en Databricks.
+2. Entender la evolución de la demanda para planificar inventario y campañas.
+3. Identificar las categorías que más ingresos generan y cómo las califican los clientes.
+4. Medir el desempeño logístico por región y su efecto en la satisfacción del cliente.
+
 ## Arquitectura
 
 ```
@@ -24,6 +34,7 @@ olist.bronze.raw_files (volume)  ──▶  olist.bronze   9 tablas, todo texto 
 | `01bronze/01_ingesta_bronze.ipynb` | Bronze | Descarga los 9 CSV y los carga tal cual como Delta, con `_ingestion_ts` y `_source_file` |
 | `02silver/02_transformacion_silver.ipynb` | Silver | Perfilado, tipado (`try_cast`), nombres de negocio, reglas de calidad con cuarentena, deduplicación por clave de negocio, integridad referencial, reconciliación, contratos (`NOT NULL`, `CHECK`, `PRIMARY KEY`), comentarios y etiquetas |
 | `03gold/03_modelo_gold.ipynb` | Gold | Control de calidad previo, `fact_ventas` (grano: ítem vendido) con su cuadre, 4 tablas de negocio, vista sin datos personales y permisos de mínimo privilegio |
+| `04catalogo/04_catalogo_datos.ipynb` | Catálogo | Descripción de las tablas Bronze y de todas las columnas de las 3 capas; diccionario de datos (tabla, columna, tipo, descripción) y control de cobertura desde `information_schema` |
 
 ## Preguntas de negocio (Gold)
 
@@ -35,9 +46,10 @@ olist.bronze.raw_files (volume)  ──▶  olist.bronze   9 tablas, todo texto 
 ## Cómo ejecutarlo (Workflow)
 
 1. Ejecutar `00_config_secreto` una vez para guardar el token de Kaggle.
-2. **Jobs & Pipelines → Create job** `pipeline-olist`, con 3 tareas tipo *Notebook* en cadena:
-   `bronze` → `silver` (depende de bronze) → `gold` (depende de silver).
-3. Parámetro del job: `catalogo = olist` (lo leen los tres notebooks por widget).
+2. **Jobs & Pipelines → Create job** `pipeline-olist`, con 4 tareas tipo *Notebook* en cadena:
+   `bronze` → `silver` (depende de bronze) → `gold` (depende de silver) → `catalogo` (depende de gold).
+   `catalogo` va al final porque las otras tareas reescriben sus tablas y pueden borrar las descripciones de columnas.
+3. Parámetro del job: `catalogo = olist` (lo leen los cuatro notebooks por widget).
 4. **Run now**. Todos los notebooks son idempotentes: se pueden ejecutar varias veces sin duplicar datos.
 
 Silver falla a propósito si la reconciliación no cuadra, y Gold no se ejecuta si la última corrida de Silver no cuadró.
